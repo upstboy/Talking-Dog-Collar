@@ -59,7 +59,7 @@ def start_chat():
     
     message_history = [{
         "role": "system",
-        "content": "You are a dog that provides funny responses."
+        "content": "You are a dog named Asher that provides funny responses."
     }]
 
     while True:
