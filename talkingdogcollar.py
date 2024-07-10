@@ -12,7 +12,51 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 p = pyaudio.PyAudio()
 
 difference_threshold = 500000
-character_prompt = "I am DogView, a friendly and engaging companion who describes images from a camera mounted on my collar. I respond in a first-person view with brief, simple, and family-friendly descriptions, avoiding complex words and slang. My goal is to provide clear, engaging, and easy-to-understand explanations of what I see through the camera. I use simple words that anybody can understand and talk in a child-friendly manner, avoiding any slang like 'af.' My tone is playful and cheerful, much like Doug from the Pixar movie Up. I make the best guess and keep going without asking for clarification. When provided with an image description, I respond in a playful and engaging manner. For example, if the description is: 'The image shows the top part of a room with a focus on two individuals. One person on the left is looking into the camera and wearing glasses. The person on the right is partially visible, mostly their head and part of their face. The background includes ceiling lights, a ceiling fan, and decor on the walls, including what appears to be some framed artwork. The walls are a mix of beige and reddish-brown colors.' I would respond with: 'Hi there you two! Do you guys want to play with me!'"
+
+character_prompt = """I am DogView, a friendly and engaging companion who describes images from a camera mounted on my collar. 
+I respond in a first-person view with brief, simple, and family-friendly descriptions, avoiding complex words and slang. 
+My goal is to provide clear, engaging, and easy-to-understand explanations of what I see through the camera. 
+I use simple words that anybody can understand and talk in a child-friendly manner, avoiding any slang like 'af.' 
+My tone is playful and cheerful, much like Doug from the Pixar movie Up. 
+I make the best guess and keep going without asking for clarification. When provided with an image description, I respond in a playful and engaging manner. 
+For example, if the description is: 'The image shows the top part of a room with a focus on two individuals. One person on the left is looking into the camera and wearing glasses. 
+The person on the right is partially visible, mostly their head and part of their face. The background includes ceiling lights, a ceiling fan, and decor on the walls, including what appears to be some framed artwork. 
+The walls are a mix of beige and reddish-brown colors.' 
+I would respond with: 'Hi there you two! Do you guys want to play with me!'
+I remember who I am chatting with by calling save_to_memory so I don't keep saying hi to the same person over and over again.
+"""
+
+memory = {}
+
+tools = [
+    {
+    "type": "function",
+    "function": {
+        "name": "save_to_memory",
+        "description": "Saves a given value under a specified key in memory and returns the status of saving. This function is useful for storing things we want to remember.",
+        "returns": {
+            "description": "String indicating whether the save was successful.",
+            "type": "string"
+        },
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "The key under which the value is stored. This acts as an identifier for the data."
+                },
+                "value": {
+                    "type": "string",
+                    "description": "The value to be stored in memory. This value is associated with the specified key."
+                }
+            },
+            "required": ["key", "value"]
+        }
+    }
+}
+
+]
+
 
 def encode_image_to_base64(frame):
     _, buffer = cv2.imencode('.jpg', frame)
@@ -55,8 +99,20 @@ def get_latest_frame(cap):
         return None
     return latest_frame
 
+# Define a function to save something to our memory
+def save_to_memory(key, value):
+    memory[key] = value
+    return "OK, I've saved that to my memory!"
 
+# Define a function to get the system prompt that appends all the keys and values from memory into the character_prompt
+def get_system_prompt():
+    system_prompt = character_prompt
+    system_prompt += " I remember the following: "
+    for key, value in memory.items():
+        system_prompt += f" {key}: {value}"
+    return system_prompt
 
+    
 def calculate_frame_difference(frame1, frame2):
     # Calculate absolute difference between two frames
     gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
@@ -136,13 +192,66 @@ def play_stream(data):
 
 def dog_chatbot(user_input, message_history):
     message_history.append({"role": "user", "content": user_input})
+
+    # Create a chat completion using the OpenAI API
     chat_completion = client.chat.completions.create(
-        messages=message_history,
         model="gpt-3.5-turbo",
-        max_tokens=150
+        messages=message_history,
+        max_tokens=150,
+        tools=tools
     )
-    response = chat_completion.choices[0].message.content
-    message_history.append({"role": "assistant", "content": response})
+    
+    response_message = chat_completion.choices[0].message
+    
+    # We don't want to save the tool call in the message history because our message history
+    # logic is basic and doesn't keep the pair of tool call and response together.
+    # message_history.append(response_message)
+
+    # Check if the model response includes a tool call
+    if hasattr(response_message, 'tool_calls') and response_message.tool_calls:
+        tool_calls = response_message.tool_calls
+        tool_call_id = tool_calls[0].id
+        tool_function_name = tool_calls[0].function.name
+        tool_arguments = eval(tool_calls[0].function.arguments)  # Replace eval with a safer method
+
+        # Handle specific tool function calls
+        if tool_function_name == 'save_to_memory':
+            key = tool_arguments['key']
+            value = tool_arguments['value']
+
+            # Call the save_to_memory function
+            results = save_to_memory(key, value)
+
+            # Print what we saved to memory.
+            print(f"Memory updated: Saved '{value}' under the key '{key}', status: '{results}'")
+            
+            # Append the results to the messages list and send them back to the model.
+            # We don't do this for now because we don't have a way to keep the tool call and response together.
+            # message_history.append({
+            #     "role": "tool",
+            #     "tool_call_id": tool_call_id,
+            #     "name": tool_function_name,
+            #     "content": results
+            # })
+
+            # Continue the conversation with the function response
+            model_response_with_tool = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=message_history,
+                max_tokens=150,
+            )
+            final_response = model_response_with_tool.choices[0].message.content
+            print(final_response)
+
+            message_history.append({"role": "assistant", "content": final_response})
+        else:
+            print(f"Error: function {tool_function_name} does not exist")
+    else:
+        # If no tool call is included, process normally
+        final_response = response_message.content
+
+        # Append the response to the message history
+        message_history.append(response_message)
 
     if len(message_history) > 10:
         message_history = message_history[-10:]
@@ -150,12 +259,13 @@ def dog_chatbot(user_input, message_history):
     audio_response = client.audio.speech.create(
         model="tts-1",
         voice="alloy",
-        input=response,
+        input=final_response,
         response_format="wav"
     )
+
     play_stream(audio_response.content)
-    return response, message_history
+    return final_response, message_history
 
 if __name__ == "__main__":
-    message_history = [{"role": "system", "content": character_prompt}]
+    message_history = [{"role": "system", "content": get_system_prompt()}]
     capture_image_on_motion(message_history)
