@@ -5,10 +5,13 @@ import os
 import pyaudio
 from io import BytesIO
 from openai import OpenAI
+import time
 
 # Initialize OpenAI and PyAudio clients
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 p = pyaudio.PyAudio()
+
+difference_threshold = 500000
 
 def encode_image_to_base64(frame):
     _, buffer = cv2.imencode('.jpg', frame)
@@ -19,13 +22,13 @@ def get_image_description(image_b64):
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=[
-            {"role": "system", "content": "You are a highly capable visual assistant."},
+            {"role": "system", "content": "You are the eyes of a dog."},
             {
                 "role": "user",
                 "content": [
                     {
                         "type": "text",
-                        "text": "What’s in this image? Describe it in first person."
+                        "text": "What’s in this image?"
                     },
                     {
                         "type": "image_url",
@@ -39,52 +42,90 @@ def get_image_description(image_b64):
     )
     return response.choices[0].message.content
 
+def get_latest_frame(cap):
+    # Clear the buffer by grabbing several frames quickly
+    for _ in range(5):
+        cap.grab()
+
+    # Retrieve the latest frame
+    ret, latest_frame = cap.retrieve()
+    if not ret:
+        print("Failed to retrieve the frame.")
+        return None
+    return latest_frame
+
+
+
+def calculate_frame_difference(frame1, frame2):
+    # Calculate absolute difference between two frames
+    gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+    gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+    diff = cv2.absdiff(gray1, gray2)
+    norm = cv2.norm(diff, cv2.NORM_L1)  # Sum of absolute differences
+    return norm
+
 def capture_image_on_motion(message_history):
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
         print("Error: Could not open webcam.")
         return
 
-    ret, frame1 = cap.read()
-    if not ret:
-        print("Failed to read from webcam.")
-        return
-
-    gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
-    gray1 = cv2.GaussianBlur(gray1, (21, 21), 0)
+    initial_buffer_size = 7  # Minimum frames to start processing
+    frame_buffer = []
+    last_described_frame = None
+    processing_time = 0.1  # Initialize with a reasonable guess to avoid division by zero
 
     while True:
-        ret, frame2 = cap.read()
+        start_time = time.time()
+
+        # Read the current frame
+        ret, frame = cap.read()
         if not ret:
             print("Failed to read from webcam.")
-            break
+            continue
 
-        gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
-        gray2 = cv2.GaussianBlur(gray2, (21, 21), 0)
-        delta_frame = cv2.absdiff(gray1, gray2)
-        thresh = cv2.threshold(delta_frame, 25, 255, cv2.THRESH_BINARY)[1]
-        thresh = cv2.dilate(thresh, None, iterations=2)
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        frame_buffer.append(frame)
+        dynamic_buffer_size = max(int(cap.get(cv2.CAP_PROP_FPS) * processing_time), initial_buffer_size)
 
-        for contour in contours:
-            if cv2.contourArea(contour) > 500:
-                print("Motion detected. Processing image...")
-                image_b64 = encode_image_to_base64(frame2)
+        if len(frame_buffer) > dynamic_buffer_size:
+            frame_buffer = frame_buffer[-dynamic_buffer_size:]  # Maintain the buffer size
 
-                # Save the image
-                cv2.imwrite('motion_detected.jpg', frame2)
+        # Process frame only if buffer has at least the initial buffer size
+        if len(frame_buffer) >= initial_buffer_size:
+            current_index = len(frame_buffer) // 2
+            current_frame = frame_buffer[current_index]
 
-                description = get_image_description(image_b64)
-                print("Image description:", description)
-                response, message_history = dog_chatbot(description, message_history)
-                print("DogBot:", response)
+            if last_described_frame is not None:
+                differences = [calculate_frame_difference(current_frame, f) for f in frame_buffer]
+                most_different_frame = frame_buffer[np.argmax(differences)]
 
-        gray1 = gray2.copy()
+                if np.max(differences) > difference_threshold:  # Define a suitable threshold
+
+                    # Print that we are processing a frame out of the buffer and print it's size
+                    print("Processing frame:", current_index, "Buffer size:", len(frame_buffer))
+
+                    image_b64 = encode_image_to_base64(most_different_frame)
+                    description = get_image_description(image_b64)
+                    print("Image description:", description)
+                    response, message_history = dog_chatbot(description, message_history)
+                    print("DogBot:", response)
+                    last_described_frame = most_different_frame
+
+                    # Clear the frame buffer after processing
+                    frame_buffer.clear()
+            else:
+                last_described_frame = current_frame  # Initialize the last described frame
+
+        # Update processing time for next iteration
+        processing_time = time.time() - start_time
+
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cap.release()
     cv2.destroyAllWindows()
+    
+
 
 def play_stream(data):
     stream = p.open(format=p.get_format_from_width(2), channels=1, rate=22050, output=True)
