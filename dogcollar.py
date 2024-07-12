@@ -44,7 +44,11 @@ def get_image_description(image_b64):
 
 def capture_image_on_motion():
     # Initialize the camera
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+
+    # Lower the resolution to avoid issues with memory on the PI-Zero.
+    cap.CAP_PROP_FRAME_WIDTH = 320
+    cap.CAP_PROP_FRAME_HEIGHT = 240
 
     if not cap.isOpened():
         print("Error: Could not open webcam.")
