@@ -122,7 +122,13 @@ def calculate_frame_difference(frame1, frame2):
     return norm
 
 def capture_image_on_motion(message_history):
-    cap = cv2.VideoCapture(0)
+     # Initialize the camera
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+
+    # Lower the resolution to avoid issues with memory on the PI-Zero.
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+    
     if not cap.isOpened():
         print("Error: Could not open webcam.")
         return
