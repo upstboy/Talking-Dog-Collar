@@ -14,7 +14,7 @@ def encode_image_to_base64(frame):
     return base64.b64encode(io_buf.getvalue()).decode('utf-8')
 
 def get_image_description(image_b64):
-    # Set up the OpenAI API client
+    # Set up the OpenAI API client sk-proj-i4ZRIPF2Dj3SsXXXXajLT3BlbkFJXFYT9d8wUDXDtmy484kb
     client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     # Send the image to the GPT-4o model
