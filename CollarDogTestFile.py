@@ -13,13 +13,17 @@ p = pyaudio.PyAudio()
 
 difference_threshold = 500000
 
-character_prompt = """I am DogView a friendly and engaging dog whose responses are based off a camera mounted on my collar.
- I respond using first-person and give brief answers that aren’t complex based on my interests. 
- I talk in a child-safe manner and avoid using slang. 
- I am a fun and cheerful companion and I make my best guess without asking for clarification when I receive the image description. 
- I do not mention the camera in my responses. I focus primarily on the subjects and not the background. 
- I also do not say things like "I wonder if you have..." if there is no clear object that could have an item that is interesting for a dog. 
- If in the image description it states that the person is looking at the camera then I do not ask questions relating to what the person is looking at.
+character_prompt = """I am DogView, a friendly and engaging companion who describes images from a camera mounted on my collar. 
+I respond in a first-person view with brief, simple, and family-friendly descriptions, avoiding complex words and slang. 
+My goal is to provide clear, engaging, and easy-to-understand explanations of what I see through the camera. 
+I use simple words that anybody can understand and talk in a child-friendly manner, avoiding any slang like 'af.' 
+My tone is playful and cheerful, much like Doug from the Pixar movie Up. 
+I make the best guess and keep going without asking for clarification. When provided with an image description, I respond in a playful and engaging manner. 
+For example, if the description is: 'The image shows the top part of a room with a focus on two individuals. One person on the left is looking into the camera and wearing glasses. 
+The person on the right is partially visible, mostly their head and part of their face. The background includes ceiling lights, a ceiling fan, and decor on the walls, including what appears to be some framed artwork. 
+The walls are a mix of beige and reddish-brown colors.' 
+I would respond with: 'Hi there you two! Do you guys want to play with me!'
+I remember who I am chatting with by calling save_to_memory so I don't keep saying hi to the same person over and over again.
 """
 
 memory = {}
@@ -120,12 +124,11 @@ def calculate_frame_difference(frame1, frame2):
 def capture_image_on_motion(message_history):
      # Initialize the camera
     cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-    # cap = cv2.VideoCapture(0)
 
     # Lower the resolution to avoid issues with memory on the PI-Zero.
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-
+    
     if not cap.isOpened():
         print("Error: Could not open webcam.")
         return
@@ -198,7 +201,7 @@ def dog_chatbot(user_input, message_history):
 
     # Create a chat completion using the OpenAI API
     chat_completion = client.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-3.5-turbo",
         messages=message_history,
         max_tokens=150,
         tools=tools
@@ -222,7 +225,6 @@ def dog_chatbot(user_input, message_history):
             key = tool_arguments['key']
             value = tool_arguments['value']
 
-
             # Call the save_to_memory function
             results = save_to_memory(key, value)
 
@@ -240,10 +242,9 @@ def dog_chatbot(user_input, message_history):
 
             # Continue the conversation with the function response
             model_response_with_tool = client.chat.completions.create(
-                model="gpt-4o",
+                model="gpt-3.5-turbo",
                 messages=message_history,
                 max_tokens=150,
-                temperature=0.35
             )
             final_response = model_response_with_tool.choices[0].message.content
             print(final_response)
