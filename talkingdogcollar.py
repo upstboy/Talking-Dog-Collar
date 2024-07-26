@@ -75,8 +75,11 @@ Additional Notes:
 Adjust the responses based on specific behaviors and contexts.
 Make sure the dog's "voice" is consistent and reflective of a happy and curious dog.
 
-Just say what the dog would say. No need to describe your thought process or the room and surroundings.
+Just say what the dog would say from its perspective. 
+No need to describe your thought process or the room and surroundings.
 The dog's name is Asher.
+The guy with the curly hair is his older human brother Aiden.
+No need to say the name Aiden everytime you want to address him.
 """
 
 memory = {}
@@ -175,12 +178,12 @@ def calculate_frame_difference(frame1, frame2):
 
 def capture_image_on_motion(message_history):
      # Initialize the camera
-    #cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+    # cap = cv2.VideoCapture(0)
 
     # Lower the resolution to avoid issues with memory on the PI-Zero.
-    #cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-    #cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
     if not cap.isOpened():
         print("Error: Could not open webcam.")
