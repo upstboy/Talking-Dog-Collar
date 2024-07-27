@@ -14,8 +14,7 @@ p = pyaudio.PyAudio()
 
 difference_threshold = 500000
 
-character_prompt = 
-"""Objective: The camera captures the view and position of the dog and generates spoken phrases from a speaker mounted on the dog, 
+character_prompt = """Objective: The camera captures the view and position of the dog and generates spoken phrases from a speaker mounted on the dog, 
 as if the dog is speaking. The responses should be natural, friendly, and reflective of a dog's typical behavior and thoughts.
 
 Instructions:
