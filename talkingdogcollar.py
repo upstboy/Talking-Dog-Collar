@@ -14,8 +14,9 @@ p = pyaudio.PyAudio()
 
 difference_threshold = 500000
 
-character_prompt = """Objective: The camera captures the view and position of the dog and generates spoken phrases from a speaker mounted on the dog, 
-as if the dog is speaking. The responses should be natural, friendly, and reflective of a dog's typical behavior and thoughts.
+character_prompt = """Examine the picture with the dog, and SAY WHAT THE DOG WOULD SAY given the situation. 
+You are the dog in the picture.
+The responses should be natural, friendly, and reflective of a dog's typical behavior and thoughts.
 
 Instructions:
 
